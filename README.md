@@ -2,11 +2,11 @@
 
 Record the Limelight 3A camera stream over its USB-C connection and save training data as MP4 and/or JPG frames on Windows, macOS, and Linux.
 
-No `pip install` needed — the recorder is pure Python standard library. FFmpeg is the only runtime dependency, and setup installs a project-local copy automatically.
+No `pip install` needed: the recorder is pure Python standard library. FFmpeg is the only runtime dependency, and setup installs a project-local copy automatically.
 
 ## One-line setup
 
-Paste one command into a terminal. No git required — it downloads the project, checks Python 3.10+, and installs FFmpeg if missing.
+Paste one command into a terminal. No git required: it downloads the project, checks Python 3.10+, and installs FFmpeg if missing.
 
 **Windows** (PowerShell):
 
@@ -31,7 +31,7 @@ Then run `windows\setup_windows.bat` on Windows or `macos-linux/setup.sh` on mac
 ## Quick setup
 
 1. Install **Python 3.10+** if it is not already installed ([Windows](https://www.python.org/downloads/windows/), `brew install python` on macOS). Windows setup can install Python via `winget`.
-2. Connect the Limelight 3A's USB-C communication port directly to the computer with a data-capable USB-C cable. **Do not hold the blue configuration button** while plugging in — that puts the camera into flash mode.
+2. Connect the Limelight 3A's USB-C communication port directly to the computer with a data-capable USB-C cable. **Do not hold the blue configuration button** while plugging in; that puts the camera into flash mode.
 3. Wait ~20 seconds for the Limelight to boot and for the USB network connection to appear.
 4. Run setup once: double-click **`windows\setup_windows.bat`** on Windows, or run **`macos-linux/setup.sh`** on macOS/Linux.
 
@@ -134,11 +134,11 @@ The Limelight's raw camera stream is on port `5802`; the normal processed/overla
 
 ## Troubleshooting
 
-* **No Limelight camera stream was detected** — make sure the camera is powered, fully booted, and connected with a USB-C data cable. Try the browser URLs above, then use `--host` if the web interface works at another address.
-* **Camera shows as a flash/storage device** — unplug it, do not hold the configuration button, and reconnect.
-* **FFmpeg was not found** — run setup again (`windows\setup_windows.bat` or `macos-linux/setup.sh`), or install FFmpeg and add it to PATH.
-* **A recording is already running** — use `windows\stop_recorder.bat` or `windows\status_recorder.bat`.
-* **Debugging** — inspect `ffmpeg.log` inside the newest session folder.
+* **No Limelight camera stream was detected**: make sure the camera is powered, fully booted, and connected with a USB-C data cable. Try the browser URLs above, then use `--host` if the web interface works at another address.
+* **Camera shows as a flash/storage device**: unplug it, do not hold the configuration button, and reconnect.
+* **FFmpeg was not found**: run setup again (`windows\setup_windows.bat` or `macos-linux/setup.sh`), or install FFmpeg and add it to PATH.
+* **A recording is already running**: use `windows\stop_recorder.bat` or `windows\status_recorder.bat`.
+* **Debugging**: inspect `ffmpeg.log` inside the newest session folder.
 
 ## Tests
 
