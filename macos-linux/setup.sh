@@ -7,6 +7,9 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FFMPEG_DIR="$PROJECT_DIR/tools/ffmpeg/bin"
 FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
 
+# Make the convenience launchers runnable after a fresh checkout.
+chmod +x "$SCRIPT_DIR"/*.sh
+
 echo "Limelight Training Recorder setup"
 echo "Project: $PROJECT_DIR"
 

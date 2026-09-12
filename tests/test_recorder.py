@@ -4,6 +4,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
 import limelight_recorder as recorder
 
@@ -55,6 +56,29 @@ class RecorderTests(unittest.TestCase):
             self.assertTrue(session.frames.is_dir())
             self.assertEqual(session.video.name, "recording.mp4")
             self.assertEqual(session.metadata.name, "metadata.json")
+
+    def test_sessions_are_numbered_when_started_in_the_same_second(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
+            recorder, "local_timestamp", return_value="20260912_153000"
+        ):
+            first = recorder.create_session(temp_dir, "limelight_raw_data")
+            second = recorder.create_session(temp_dir, "limelight_raw_data")
+            self.assertEqual(first.root.name, "limelight_raw_data_20260912_153000_01")
+            self.assertEqual(second.root.name, "limelight_raw_data_20260912_153000_02")
+            self.assertEqual(recorder.recording_number(first), 1)
+            self.assertEqual(recorder.recording_number(second), 2)
+
+    def test_session_prefix_matches_recorded_feed(self):
+        self.assertEqual(
+            recorder.session_prefix_for_stream("http://172.28.0.1:5802"),
+            "limelight_raw_data",
+        )
+        self.assertEqual(
+            recorder.session_prefix_for_stream("http://172.28.0.1:5800"),
+            "limelight_overlay_data",
+        )
+        self.assertEqual(recorder.feed_type_for_stream("http://172.28.0.1:5800"), "overlay")
+        self.assertEqual(recorder.feed_type_for_stream("http://172.28.0.1:5802"), "raw")
 
     def test_ffmpeg_command_writes_video_and_sampled_jpgs(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import signal
 import shutil
 import socket
@@ -266,16 +267,28 @@ def resolve_ffmpeg(explicit: Optional[str] = None) -> Path:
     )
 
 
-def create_session(output_dir: str | Path) -> SessionPaths:
-    """Create a unique timestamped training-data session directory."""
+def _session_prefix(prefix: str) -> str:
+    """Keep generated session names readable and safe on every platform."""
+
+    value = re.sub(r"[^A-Za-z0-9_-]+", "_", str(prefix or "limelight_data")).strip("_-")
+    return value or "limelight_data"
+
+
+def create_session(output_dir: str | Path, prefix: str = "limelight_raw_data") -> SessionPaths:
+    """Create a numbered, timestamped training-data session directory."""
 
     root = Path(output_dir).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
-    session_root = root / f"session_{local_timestamp()}"
-    suffix = 2
-    while session_root.exists():
-        session_root = root / f"session_{local_timestamp()}_{suffix}"
-        suffix += 1
+    timestamp = local_timestamp()
+    safe_prefix = _session_prefix(prefix)
+    recording_number = 1
+    while True:
+        session_root = root / f"{safe_prefix}_{timestamp}_{recording_number:02d}"
+        try:
+            session_root.mkdir()
+            break
+        except FileExistsError:
+            recording_number += 1
     frames = session_root / "frames"
     frames.mkdir(parents=True)
     return SessionPaths(
@@ -286,6 +299,33 @@ def create_session(output_dir: str | Path) -> SessionPaths:
         metadata=session_root / "metadata.json",
         ffmpeg_log=session_root / "ffmpeg.log",
     )
+
+
+def session_prefix_for_stream(stream_url: str) -> str:
+    """Choose a clear output prefix for raw versus overlay recordings."""
+
+    try:
+        port = urlparse(stream_url).port
+    except ValueError:
+        port = None
+    if port == RAW_STREAM_PORT:
+        return "limelight_raw_data"
+    if port == OVERLAY_STREAM_PORT:
+        return "limelight_overlay_data"
+    return "limelight_data"
+
+
+def feed_type_for_stream(stream_url: str) -> str:
+    """Return the user-facing feed type for a recorded stream URL."""
+
+    return "overlay" if session_prefix_for_stream(stream_url) == "limelight_overlay_data" else "raw"
+
+
+def recording_number(session: SessionPaths) -> int:
+    """Read the sequential recording number from a generated session name."""
+
+    match = re.search(r"_(\d+)$", session.root.name)
+    return int(match.group(1)) if match else 1
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -432,9 +472,15 @@ def run_session(
     """Run FFmpeg until stopped, then finalize metadata and cleanup state."""
 
     output_mode = validate_output_mode(output_mode)
-    session = create_session(output_dir)
+    session_prefix = session_prefix_for_stream(stream.url)
+    session = create_session(output_dir, session_prefix)
     command = ffmpeg_command(ffmpeg, stream.url, session, fps, output_mode)
+    session_number = recording_number(session)
+    feed_type = feed_type_for_stream(stream.url)
     metadata: dict[str, Any] = {
+        "session_name": session.root.name,
+        "recording_number": session_number,
+        "feed_type": feed_type,
         "started_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "stream_url": stream.url,
         "stream_host": stream.host,
@@ -455,6 +501,9 @@ def run_session(
         {
             "pid": os.getpid(),
             "session_dir": str(session.root),
+            "session_name": session.root.name,
+            "recording_number": session_number,
+            "feed_type": feed_type,
             "stream_url": stream.url,
             "fps": fps,
             "capture_mode": "maximum available" if fps is None else "sampled",
@@ -580,6 +629,7 @@ def start_recording(args: argparse.Namespace) -> int:
         "pid": 0,
         "status": "starting",
         "stream_url": stream.url,
+        "feed_type": feed_type_for_stream(stream.url),
         "fps": fps,
         "capture_mode": "maximum available" if fps is None else "sampled",
         "output_mode": output_mode,

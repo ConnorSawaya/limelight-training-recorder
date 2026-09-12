@@ -75,6 +75,16 @@ ORIENTATIONS = {
 }
 
 FLICKER_MODES = {0: "None", 1: "50hz", 2: "60hz"}
+FEED_TYPES = {"raw", "overlay"}
+
+
+def validate_feed_type(value: Any) -> str:
+    """Validate the dashboard's camera-feed choice."""
+
+    feed_type = str(value or "raw").strip().lower()
+    if feed_type not in FEED_TYPES:
+        raise RecorderError("Choose either the raw camera feed or the processed overlay feed.")
+    return feed_type
 
 
 def _display_host(hostname: str) -> str:
@@ -282,6 +292,11 @@ PAGE = r'''<!doctype html>
     .setting-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(290px, .7fr); gap: 18px; align-items: start; }
     .panel { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: 0 12px 36px #0004; }
+    .output-settings { margin-top: 18px; }
+    .output-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
+    .output-heading h2 { margin-bottom: 0; }
+    .save-state { color: var(--green); font-size: 13px; min-height: 20px; text-align: right; }
+    .output-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
     .preview { padding: 10px; }
     .preview-box { aspect-ratio: 16 / 10; display: grid; place-items: center; overflow: hidden; border-radius: 9px; background: #080a0d; border: 1px solid #26303b; }
     #preview { display: block; width: 100%; height: 100%; object-fit: contain; }
@@ -308,7 +323,7 @@ PAGE = r'''<!doctype html>
     .details div { display: flex; justify-content: space-between; gap: 14px; margin: 7px 0; }
     .details span:last-child { color: var(--text); text-align: right; overflow-wrap: anywhere; }
     .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
-    @media (max-width: 780px) { body { padding-right: 0; } .layout { grid-template-columns: 1fr; } .settings-sidebar { width: min(380px, 92vw); } }
+    @media (max-width: 780px) { body { padding-right: 0; } .layout, .output-grid { grid-template-columns: 1fr; } .settings-sidebar { width: min(380px, 92vw); } }
   </style>
 </head>
 <body>
@@ -379,7 +394,6 @@ PAGE = r'''<!doctype html>
           <button id="refreshCamera" class="secondary">Refresh camera settings</button>
           <button id="saveCamera" class="save">Save to Limelight</button>
         </div>
-        <p class="setting-note">Recording follows the Limelight resolution and FPS above. The recorder saves every frame delivered by the camera.</p>
       </div>
       <div class="setting-group">
         <h3>Recording input</h3>
@@ -388,23 +402,7 @@ PAGE = r'''<!doctype html>
           <option value="raw" selected>Raw camera feed (before overlay)</option>
           <option value="overlay">Processed feed (with overlay)</option>
         </select>
-        <label for="stream">Limelight MJPEG stream URL</label>
-        <input id="stream" type="url" value="http://172.28.0.1:5802/" spellcheck="false">
-      </div>
-      <div class="setting-group">
-        <h3>Recording output</h3>
-        <label for="outputMode">Save output as</label>
-      <select id="outputMode">
-        <option value="both">MP4 + JPG frames</option>
-        <option value="mp4">MP4 only</option>
-        <option value="images_zip">JPG images + ZIP only</option>
-        <option value="both_zip">MP4 + JPG images + ZIP</option>
-      </select>
-      <label for="outputDir">Output folder</label>
-      <input id="outputDir" type="text" value="training_data" spellcheck="false">
-      <div class="row">
-        <button id="save" class="save">Save output settings</button>
-      </div>
+        <p class="setting-note">The recorder automatically finds the Limelight over USB-C and uses the proxy only as a backup.</p>
       </div>
     </div>
   </aside>
@@ -418,7 +416,7 @@ PAGE = r'''<!doctype html>
         <h2>Live camera feed</h2>
         <div class="preview-box">
           <img id="preview" alt="Limelight camera preview" hidden>
-          <div id="empty" class="empty">Enter the stream URL and click Check connection.</div>
+          <div id="empty" class="empty">Click Check connection to find the Limelight.</div>
         </div>
       </section>
       <section class="panel">
@@ -432,6 +430,7 @@ PAGE = r'''<!doctype html>
         <p id="message" class="message" role="status"></p>
         <div class="details">
           <div><span>Current session</span><span id="session">-</span></div>
+          <div><span>Recording number</span><span id="recordingNumber">-</span></div>
           <div><span>Intake path</span><span id="intakeMode">USB direct preferred</span></div>
           <div><span>Frames saved</span><span id="frames">-</span></div>
           <div><span>Capture mode</span><span id="captureMode">Limelight camera rate</span></div>
@@ -439,18 +438,40 @@ PAGE = r'''<!doctype html>
         </div>
       </section>
     </div>
+    <section class="panel output-settings">
+      <div class="output-heading">
+        <div>
+          <h2>Recording output</h2>
+          <p class="setting-note">These settings save automatically and apply to the next recording.</p>
+        </div>
+        <span id="saveState" class="save-state" role="status"></span>
+      </div>
+      <div class="output-grid">
+        <div>
+          <label for="outputMode">Save output as</label>
+          <select id="outputMode">
+            <option value="both">MP4 + JPG frames</option>
+            <option value="mp4">MP4 only</option>
+            <option value="images_zip">JPG images + ZIP only</option>
+            <option value="both_zip">MP4 + JPG images + ZIP</option>
+          </select>
+        </div>
+        <div>
+          <label for="outputDir">Output folder</label>
+          <input id="outputDir" type="text" value="training_data" spellcheck="false">
+        </div>
+      </div>
+    </section>
   </main>
   <script>
     const settingsSidebar = document.getElementById('settingsSidebar');
     const settingsCollapse = document.getElementById('settingsCollapse');
-    const stream = document.getElementById('stream');
     const feedType = document.getElementById('feedType');
     const preview = document.getElementById('preview');
     const empty = document.getElementById('empty');
     const start = document.getElementById('start');
     const stop = document.getElementById('stop');
     const check = document.getElementById('check');
-    const save = document.getElementById('save');
     const refreshCamera = document.getElementById('refreshCamera');
     const saveCamera = document.getElementById('saveCamera');
     const outputMode = document.getElementById('outputMode');
@@ -472,11 +493,15 @@ PAGE = r'''<!doctype html>
     const status = document.getElementById('status');
     const message = document.getElementById('message');
     const session = document.getElementById('session');
+    const recordingNumber = document.getElementById('recordingNumber');
     const frames = document.getElementById('frames');
     const captureMode = document.getElementById('captureMode');
     const output = document.getElementById('output');
     const intakeMode = document.getElementById('intakeMode');
     const pipelineTitle = document.getElementById('pipelineTitle');
+    const saveState = document.getElementById('saveState');
+    let saveTimer = null;
+    let activePreviewUrl = '';
 
     function setSettingsCollapsed(collapsed) {
       settingsSidebar.classList.toggle('collapsed', collapsed);
@@ -489,29 +514,12 @@ PAGE = r'''<!doctype html>
       message.textContent = text || '';
       message.className = isError ? 'message error' : 'message';
     }
-    function updatePreview() {
-      const url = stream.value.trim();
+    function updatePreview(url = activePreviewUrl) {
+      activePreviewUrl = url || '';
       if (!url) { preview.hidden = true; empty.hidden = false; return; }
       preview.src = url;
       preview.hidden = false;
       empty.hidden = true;
-    }
-    function syncFeedTypeFromStream() {
-      try {
-        const port = new URL(stream.value).port;
-        feedType.value = port === '5800' ? 'overlay' : 'raw';
-      } catch (error) { /* Leave the selected feed type until the URL is valid. */ }
-    }
-    function updateStreamForFeedType() {
-      try {
-        const value = stream.value.trim();
-        const url = new URL(value.includes('://') ? value : 'http://' + value);
-        url.port = feedType.value === 'overlay' ? '5800' : '5802';
-        if (!url.pathname) url.pathname = '/';
-        stream.value = url.toString();
-        updatePreview();
-        loadCameraSettings();
-      } catch (error) { setMessage('Enter a valid Limelight stream URL first.', true); }
     }
     function updateStatus(data) {
       const active = Boolean(data.recording);
@@ -521,9 +529,7 @@ PAGE = r'''<!doctype html>
       start.disabled = active || starting;
       stop.disabled = !active && !starting;
       if (data.recording && data.stream_url) {
-        preview.src = data.stream_url;
-        preview.hidden = false;
-        empty.hidden = true;
+        updatePreview(data.stream_url);
       }
       if (data.intake_mode) {
         intakeMode.textContent = data.intake_mode;
@@ -531,6 +537,10 @@ PAGE = r'''<!doctype html>
       }
       if (data.capture_mode) captureMode.textContent = data.capture_mode === 'maximum available' ? 'Limelight camera rate' : data.capture_mode;
       if (data.session_dir) session.textContent = data.session_dir;
+      if (data.recording_number) recordingNumber.textContent = '#' + data.recording_number;
+      if (data.latest_session && data.latest_session.recording_number) {
+        recordingNumber.textContent = '#' + data.latest_session.recording_number;
+      }
       if (data.latest_session && data.latest_session.frames_saved !== undefined) frames.textContent = data.latest_session.frames_saved;
       if (data.output_dir) output.textContent = data.output_dir;
       if (!active && data.latest_session && data.latest_session.status === 'error' && data.latest_session.error) {
@@ -538,27 +548,31 @@ PAGE = r'''<!doctype html>
       }
     }
     function collectSettings() {
-      return {stream_url: stream.value.trim(), output_mode: outputMode.value, output_dir: outputDir.value.trim()};
+      return {feed_type: feedType.value, output_mode: outputMode.value, output_dir: outputDir.value.trim()};
     }
     function applySettings(settings) {
-      if (settings.stream_url) stream.value = settings.stream_url;
-      syncFeedTypeFromStream();
+      if (settings.feed_type) feedType.value = settings.feed_type;
       if (settings.output_mode) outputMode.value = settings.output_mode;
       if (settings.output_dir) outputDir.value = settings.output_dir;
-      updatePreview();
     }
     async function loadSettings() {
       try { const data = await callApi('/api/settings'); applySettings(data.settings); }
       catch (error) { setMessage('Could not load saved settings: ' + error.message, true); }
     }
     async function saveSettings() {
-      save.disabled = true;
+      saveState.textContent = 'Saving...';
       try {
         const data = await callApi('/api/settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(collectSettings())});
         applySettings(data.settings);
-        setMessage('Settings saved.');
-      } catch (error) { setMessage(error.message, true); }
-      finally { save.disabled = false; }
+        saveState.textContent = 'Saved';
+      } catch (error) {
+        saveState.textContent = 'Could not save: ' + error.message;
+      }
+    }
+    function scheduleSaveSettings() {
+      saveState.textContent = 'Pending...';
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveSettings, 500);
     }
     function cameraFields() {
       return {
@@ -593,7 +607,7 @@ PAGE = r'''<!doctype html>
     async function loadCameraSettings(showMessage = false) {
       refreshCamera.disabled = true;
       try {
-        const data = await callApi('/api/camera-settings?stream_url=' + encodeURIComponent(stream.value.trim()));
+        const data = await callApi('/api/camera-settings');
         applyCameraSettings(data.settings);
         if (showMessage) setMessage('Limelight camera settings loaded.');
       } catch (error) {
@@ -610,7 +624,7 @@ PAGE = r'''<!doctype html>
         const data = await callApi('/api/camera-settings', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({...cameraFields(), stream_url: stream.value.trim()})
+          body: JSON.stringify(cameraFields())
         });
         applyCameraSettings(data.settings);
         setMessage('Limelight camera settings saved. Recording will use the camera stream rate shown above.');
@@ -629,11 +643,10 @@ PAGE = r'''<!doctype html>
     }
     async function checkConnection() {
       check.disabled = true;
-      setMessage('Checking ' + stream.value.trim() + ' ...');
-      updatePreview();
+      setMessage('Detecting the Limelight over USB-C ...');
       try {
-        const data = await callApi('/api/check?stream_url=' + encodeURIComponent(stream.value.trim()));
-        if (data.preview_url) { preview.src = data.preview_url; preview.hidden = false; empty.hidden = true; }
+        const data = await callApi('/api/check?feed_type=' + encodeURIComponent(feedType.value));
+        if (data.preview_url) updatePreview(data.preview_url);
         if (data.intake_mode) {
           intakeMode.textContent = data.intake_mode;
           pipelineTitle.textContent = data.intake_mode.toLowerCase().includes('proxy') ? 'PROXY BACKUP' : 'USB DIRECT';
@@ -664,17 +677,16 @@ PAGE = r'''<!doctype html>
       } catch (error) { setMessage(error.message, true); await refresh(); }
     }
     check.addEventListener('click', checkConnection);
-    save.addEventListener('click', saveSettings);
     refreshCamera.addEventListener('click', () => loadCameraSettings(true));
     saveCamera.addEventListener('click', saveCameraSettings);
-    feedType.addEventListener('change', updateStreamForFeedType);
+    feedType.addEventListener('change', () => { scheduleSaveSettings(); updatePreview(''); checkConnection(); loadCameraSettings(); });
+    outputMode.addEventListener('change', scheduleSaveSettings);
+    outputDir.addEventListener('input', scheduleSaveSettings);
     start.addEventListener('click', startRecording);
     stop.addEventListener('click', stopRecording);
-    stream.addEventListener('change', () => { syncFeedTypeFromStream(); updatePreview(); loadCameraSettings(); });
     settingsCollapse.addEventListener('click', () => setSettingsCollapsed(!settingsSidebar.classList.contains('collapsed')));
-    updatePreview();
-    loadSettings();
-    loadCameraSettings();
+    updatePreview('');
+    loadSettings().then(() => { checkConnection(); loadCameraSettings(); });
     refresh();
     setInterval(refresh, 1000);
   </script>
@@ -697,6 +709,13 @@ class RecorderWebApp:
         }:
             saved_stream_url = DEFAULT_STREAM_URL
         self.default_stream_url = saved_stream_url or args.stream_url or DEFAULT_STREAM_URL
+        saved_feed_type = str(saved.get("feed_type") or "").strip().lower()
+        if saved_feed_type not in FEED_TYPES:
+            try:
+                saved_feed_type = "overlay" if urlparse(self.default_stream_url).port == OVERLAY_STREAM_PORT else "raw"
+            except ValueError:
+                saved_feed_type = "raw"
+        self.feed_type = saved_feed_type
         saved_output_dir = saved.get("output_dir") or args.output_dir
         self.output_dir = Path(str(saved_output_dir)).expanduser().resolve()
         self.ffmpeg = args.ffmpeg
@@ -715,7 +734,7 @@ class RecorderWebApp:
 
     def _settings_payload(self) -> dict[str, Any]:
         return {
-            "stream_url": self.default_stream_url,
+            "feed_type": self.feed_type,
             "output_mode": self.default_output_mode,
             "output_dir": str(self.output_dir),
         }
@@ -724,9 +743,20 @@ class RecorderWebApp:
         write_json(SETTINGS_FILE, self._settings_payload())
 
     def _parse_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
-        source_url = str(payload.get("stream_url") or self.default_stream_url).strip()
-        if not source_url:
-            raise RecorderError("Enter a Limelight stream URL.")
+        requested_feed_type = payload.get("feed_type")
+        # Accept stream_url from older dashboard clients while keeping it out
+        # of the current UI and saved settings format.
+        if not requested_feed_type and payload.get("stream_url"):
+            try:
+                requested_feed_type = (
+                    "overlay"
+                    if urlparse(str(payload["stream_url"])).port == OVERLAY_STREAM_PORT
+                    else "raw"
+                )
+            except ValueError:
+                requested_feed_type = self.feed_type
+        feed_type = validate_feed_type(requested_feed_type or self.feed_type)
+        source_url = self._stream_url_for_feed(feed_type)
 
         output_dir_text = str(payload.get("output_dir") or self.output_dir).strip()
         if not output_dir_text:
@@ -737,6 +767,7 @@ class RecorderWebApp:
 
         return {
             "stream_url": source_url,
+            "feed_type": feed_type,
             "output_mode": validate_output_mode(
                 str(payload.get("output_mode") or self.default_output_mode)
             ),
@@ -744,23 +775,42 @@ class RecorderWebApp:
         }
 
     def _apply_settings(self, parsed: dict[str, Any]) -> None:
-        self.default_stream_url = parsed["stream_url"]
+        self.feed_type = parsed["feed_type"]
         self.default_output_mode = parsed["output_mode"]
         self.output_dir = parsed["output_dir"]
         self._persist_settings()
 
+    def _stream_url_for_feed(self, feed_type: str) -> str:
+        """Build the internal Limelight stream URL from the selected feed."""
+
+        value = self.default_stream_url.strip()
+        if "://" not in value:
+            value = f"http://{value}"
+        parsed = urlparse(value)
+        if not parsed.hostname:
+            raise RecorderError("The Limelight host could not be determined automatically.")
+        port = OVERLAY_STREAM_PORT if feed_type == "overlay" else RAW_STREAM_PORT
+        return f"http://{_display_host(parsed.hostname)}:{port}/"
+
     def _latest_session(self) -> dict[str, Any] | None:
         if not self.output_dir.is_dir():
             return None
-        sessions = [path for path in self.output_dir.glob("session_*") if path.is_dir()]
+        session_prefixes = ("session_", "limelight_raw_data_", "limelight_overlay_data_", "limelight_data_")
+        sessions = [
+            path
+            for path in self.output_dir.iterdir()
+            if path.is_dir() and path.name.startswith(session_prefixes)
+        ]
         if not sessions:
             return None
         latest = max(sessions, key=lambda path: path.stat().st_mtime)
         metadata = read_json(latest / "metadata.json")
         if not metadata:
-            return {"directory": str(latest)}
+            return {"directory": str(latest), "session_name": latest.name}
         return {
             "directory": str(latest),
+            "session_name": metadata.get("session_name") or latest.name,
+            "recording_number": metadata.get("recording_number"),
             "status": metadata.get("status"),
             "frames_saved": metadata.get("frames_saved", 0),
             "error": metadata.get("error") or (
@@ -790,8 +840,11 @@ class RecorderWebApp:
             "status": status if active else "idle",
             "pid": pid or None,
             "session_dir": state.get("session_dir"),
+            "session_name": state.get("session_name"),
+            "recording_number": state.get("recording_number"),
             "stream_url": state.get("stream_url") or self.default_stream_url,
             "intake_mode": self.last_intake_mode,
+            "feed_type": state.get("feed_type") or self.feed_type,
             "fps": state.get("fps"),
             "output_dir": str(self.output_dir),
             "latest_session": self._latest_session(),
@@ -847,6 +900,7 @@ class RecorderWebApp:
 
         # The fallback still reads the Limelight camera stream, but routes it
         # through this local server so FFmpeg has a second intake path.
+        stream_port = urlparse(source_url).port or STREAM_PORT
         fallback_url = f"http://limelight.local:{stream_port}/"
         try:
             discover_stream(stream_url=fallback_url, timeout=1.5)
@@ -860,13 +914,12 @@ class RecorderWebApp:
 
     def save_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.operation_lock:
-            if self.status()["recording"]:
-                raise RecorderError("Stop the current recording before changing saved settings.")
             self._apply_settings(self._parse_settings(payload))
             return {"message": "Settings saved.", "settings": self._settings_payload()}
 
-    def check(self, source_url: str | None) -> dict[str, Any]:
-        source_url = (source_url or self.default_stream_url).strip()
+    def check(self, feed_type: str | None = None) -> dict[str, Any]:
+        feed_type = validate_feed_type(feed_type or self.feed_type)
+        source_url = self._stream_url_for_feed(feed_type)
         info, intake_mode = self._select_intake(source_url)
         return {
             "reachable": True,
@@ -874,6 +927,7 @@ class RecorderWebApp:
             "preview_url": info.url,
             "host": info.host,
             "intake_mode": intake_mode,
+            "feed_type": feed_type,
         }
 
     def start(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1030,8 +1084,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/check":
                 query = parse_qs(parsed.query)
-                source_url = query.get("stream_url", [self.app.default_stream_url])[0]
-                self._send_json(200, self.app.check(source_url))
+                feed_type = query.get("feed_type", [self.app.feed_type])[0]
+                self._send_json(200, self.app.check(feed_type))
                 return
             self._send_json(404, {"error": "Not found."})
         except RecorderError as exc:

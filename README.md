@@ -1,12 +1,31 @@
 # Limelight Training Recorder
 
-Record the Limelight 3A camera stream over its USB-C connection and save training data as MP4 and/or JPG frames on Windows, macOS, and Linux.
+Small, local control panel for recording Limelight 3A training data over the camera's USB-C network connection.
 
-No `pip install` needed: the recorder is pure Python standard library. FFmpeg is the only runtime dependency, and setup installs a project-local copy automatically.
+It records the camera stream with FFmpeg and can save an MP4, JPG frames, and/or a ZIP of the JPGs. The project uses only Python's standard library; FFmpeg is the only runtime dependency.
+
+![Dashboard preview](docs/dashboard.png)
+
+## How it works
+
+```text
+Limelight 3A over USB-C
+        │
+        ├─ direct USB MJPEG feed (preferred)
+        │       └─ FFmpeg
+        │              ├─ recording.mp4
+        │              └─ frames/frame_000001.jpg ...
+        │
+        └─ hostname MJPEG proxy (backup only)
+```
+
+The dashboard automatically checks the known Limelight USB-network addresses. It records directly from the camera whenever possible and displays `USB DIRECT` or `PROXY BACKUP` so the intake path is always clear. The camera's own resolution setting controls its available FPS; the recorder preserves every incoming frame for dashboard recordings.
 
 ## One-line setup
 
 Paste one command into a terminal. No git required: it downloads the project, checks Python 3.10+, and installs FFmpeg if missing.
+
+Run the same installer again later to update an existing Git checkout before setup runs.
 
 **Windows** (PowerShell):
 
@@ -42,13 +61,44 @@ limelight_recorder.py    Core recorder CLI (Windows, macOS, Linux)
 web_interface.py         Local browser control panel
 install/                 One-line installers (install.ps1, install.sh)
 windows/                 Windows setup and batch launchers
-macos-linux/setup.sh     macOS/Linux setup
+macos-linux/             macOS/Linux setup and launchers
+docs/dashboard.png       Dashboard screenshot
 tests/                   Standard-library unit tests
 tools/                   Project-local FFmpeg (created by setup, git-ignored)
 training_data/           Recorded sessions (created when recording, git-ignored)
 ```
 
-## Record
+## Record from the dashboard
+
+1. Plug the Limelight 3A directly into the computer with a data-capable USB-C cable.
+2. Wait for it to boot and for the USB network adapter to appear.
+3. Start the dashboard with the launcher for your platform.
+4. Click **Check connection**, choose the camera feed, and click **Start recording**.
+5. Click **Stop recording**. The session is finalized before the button becomes available again.
+
+The output choices and output folder are in the full-width panel at the bottom of the dashboard and save automatically. Limelight camera settings remain in the right sidebar; click **Save to Limelight** after changing a device setting.
+
+### Windows
+
+Run setup once by double-clicking `windows\setup_windows.bat`, then double-click `windows\start_web.bat`.
+
+### macOS / Linux
+
+Run setup once:
+
+```bash
+bash macos-linux/setup.sh
+```
+
+Then start the dashboard:
+
+```bash
+bash macos-linux/start_web.sh
+```
+
+The equivalent command is `python3 limelight_recorder.py web --open-browser`. The other launchers are `start_recorder.sh`, `run_foreground.sh`, `stop_recorder.sh`, and `status_recorder.sh`.
+
+## Record from the command line
 
 The `*.bat` launchers are Windows-only. On macOS/Linux use `python3` instead of `py -3`.
 
@@ -61,19 +111,13 @@ The `*.bat` launchers are Windows-only. On macOS/Linux use `python3` instead of 
 
 ## Browser interface
 
-On Windows, double-click **`windows\start_web.bat`** (after setup). On macOS/Linux run:
-
-```text
-python3 limelight_recorder.py web --open-browser
-```
-
 The control panel opens at:
 
 ```text
 http://127.0.0.1:8080/
 ```
 
-The page shows the live MJPEG feed and reads and writes Limelight camera settings (resolution/FPS, exposure, gain, orientation, flicker correction, white balance) directly on the device. The default recording feed is the Limelight's raw MJPEG endpoint on port `5802`, which is intended to provide the camera image before the normal pipeline overlay. Use the **Camera feed to record** menu to choose the processed overlay stream on port `5800` instead.
+The page shows the live MJPEG feed and reads and writes Limelight camera settings (resolution/FPS, exposure, gain, orientation, flicker correction, white balance) directly on the device. Use **Camera feed to record** to choose the raw camera image or the processed overlay image. There is no URL to configure: the dashboard detects the camera automatically.
 
 The server binds to `127.0.0.1`, so it is only reachable from this computer. If port 8080 is taken, use another:
 
@@ -102,11 +146,11 @@ py -3 limelight_recorder.py start --host 172.26.0.1 --fps 3     # manual camera 
 
 ## Output
 
-Each run creates a timestamped folder under `training_data`:
+Each run creates a numbered, timestamped folder under `training_data`. This makes back-to-back recordings easy to tell apart:
 
 ```text
 training_data/
-  session_20260912_143015/
+  limelight_raw_data_20260912_143015_01/
     recording.mp4
     frames/
       frame_000001.jpg
@@ -114,9 +158,11 @@ training_data/
     frames.zip             (when a ZIP output mode is selected)
     metadata.json
     ffmpeg.log
+  limelight_raw_data_20260912_143022_01/
+    ...                     (the next recording)
 ```
 
-`metadata.json` records the stream URL, capture mode, output mode, timestamps, and output counts.
+If two sessions start in the same second, the final number increments to `_02`, `_03`, and so on. Overlay sessions use the `limelight_overlay_data_...` prefix. `metadata.json` records the session name, recording number, stream URL, intake mode, capture mode, output mode, timestamps, and output counts.
 
 ## Camera detection
 
@@ -130,14 +176,14 @@ http://172.26.0.1:5801
 http://172.28.0.1:5801
 ```
 
-The Limelight's raw camera stream is on port `5802`; the normal processed/overlay stream is on port `5800`, and its web interface is on port `5801`. For a custom/static address, pass `--host <IP>` or use `--stream-url <URL>`.
+The Limelight's raw camera stream is on port `5802`; the normal processed/overlay stream is on port `5800`, and its web interface is on port `5801`. For a custom/static address from the command line, pass `--host <IP>` or use `--stream-url <URL>`.
 
 ## Troubleshooting
 
 * **No Limelight camera stream was detected**: make sure the camera is powered, fully booted, and connected with a USB-C data cable. Try the browser URLs above, then use `--host` if the web interface works at another address.
 * **Camera shows as a flash/storage device**: unplug it, do not hold the configuration button, and reconnect.
 * **FFmpeg was not found**: run setup again (`windows\setup_windows.bat` or `macos-linux/setup.sh`), or install FFmpeg and add it to PATH.
-* **A recording is already running**: use `windows\stop_recorder.bat` or `windows\status_recorder.bat`.
+* **A recording is already running**: stop it first with `windows\stop_recorder.bat`, `macos-linux/stop_recorder.sh`, or the dashboard's **Stop recording** button. The next start creates a new numbered session folder.
 * **Debugging**: inspect `ffmpeg.log` inside the newest session folder.
 
 ## Tests
