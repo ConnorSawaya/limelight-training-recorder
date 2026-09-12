@@ -1,0 +1,7 @@
+tools/
+training_data/
+.limelight_recorder_state.json
+.limelight_recorder_stop
+.limelight_web_settings.json
+__pycache__/
+*.pyc
