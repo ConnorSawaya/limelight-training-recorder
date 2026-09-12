@@ -31,7 +31,7 @@ class RecorderTests(unittest.TestCase):
 
     def test_stream_url_for_host_accepts_port(self):
         self.assertEqual(recorder.stream_url_for_host("127.0.0.1:9999"), "http://127.0.0.1:9999")
-        self.assertEqual(recorder.stream_url_for_host("http://camera.local"), "http://camera.local:5800")
+        self.assertEqual(recorder.stream_url_for_host("http://camera.local"), "http://camera.local:5802")
 
     def test_probe_and_discover_local_mjpeg_stream(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), MjpegHandler)

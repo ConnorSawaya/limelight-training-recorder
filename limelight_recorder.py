@@ -32,12 +32,16 @@ PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = PROJECT_DIR / "training_data"
 DEFAULT_STATE_FILE = PROJECT_DIR / ".limelight_recorder_state.json"
 DEFAULT_STOP_FILE = PROJECT_DIR / ".limelight_recorder_stop"
-STREAM_PORT = 5800
+OVERLAY_STREAM_PORT = 5800
+RAW_STREAM_PORT = 5802
+# The raw endpoint is the default so training data is captured before the
+# Limelight pipeline draws its targeting/diagnostic overlay.
+STREAM_PORT = RAW_STREAM_PORT
 WEB_PORT = 5801
 # Limelight's USB-C connection appears to Windows as a network adapter.  Use
 # that camera IP as the primary intake; the web dashboard can provide a local
 # proxy fallback when the USB address is unavailable.
-DEFAULT_STREAM_URL = "http://172.28.0.1:5800/"
+DEFAULT_STREAM_URL = f"http://172.28.0.1:{RAW_STREAM_PORT}/"
 USER_AGENT = "LimelightTrainingRecorder/1.0"
 
 

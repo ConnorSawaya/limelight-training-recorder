@@ -25,6 +25,9 @@ from limelight_recorder import (
     DEFAULT_STREAM_URL,
     RecorderError,
     StreamInfo,
+    OVERLAY_STREAM_PORT,
+    RAW_STREAM_PORT,
+    STREAM_PORT,
     candidate_hosts,
     discover_stream,
     process_is_running,
@@ -379,9 +382,17 @@ PAGE = r'''<!doctype html>
         <p class="setting-note">Recording follows the Limelight resolution and FPS above. The recorder saves every frame delivered by the camera.</p>
       </div>
       <div class="setting-group">
-        <h3>Recording output</h3>
+        <h3>Recording input</h3>
+        <label for="feedType">Camera feed to record</label>
+        <select id="feedType">
+          <option value="raw" selected>Raw camera feed (before overlay)</option>
+          <option value="overlay">Processed feed (with overlay)</option>
+        </select>
         <label for="stream">Limelight MJPEG stream URL</label>
-        <input id="stream" type="url" value="http://limelight.local:5800/" spellcheck="false">
+        <input id="stream" type="url" value="http://172.28.0.1:5802/" spellcheck="false">
+      </div>
+      <div class="setting-group">
+        <h3>Recording output</h3>
         <label for="outputMode">Save output as</label>
       <select id="outputMode">
         <option value="both">MP4 + JPG frames</option>
@@ -433,6 +444,7 @@ PAGE = r'''<!doctype html>
     const settingsSidebar = document.getElementById('settingsSidebar');
     const settingsCollapse = document.getElementById('settingsCollapse');
     const stream = document.getElementById('stream');
+    const feedType = document.getElementById('feedType');
     const preview = document.getElementById('preview');
     const empty = document.getElementById('empty');
     const start = document.getElementById('start');
@@ -484,6 +496,23 @@ PAGE = r'''<!doctype html>
       preview.hidden = false;
       empty.hidden = true;
     }
+    function syncFeedTypeFromStream() {
+      try {
+        const port = new URL(stream.value).port;
+        feedType.value = port === '5800' ? 'overlay' : 'raw';
+      } catch (error) { /* Leave the selected feed type until the URL is valid. */ }
+    }
+    function updateStreamForFeedType() {
+      try {
+        const value = stream.value.trim();
+        const url = new URL(value.includes('://') ? value : 'http://' + value);
+        url.port = feedType.value === 'overlay' ? '5800' : '5802';
+        if (!url.pathname) url.pathname = '/';
+        stream.value = url.toString();
+        updatePreview();
+        loadCameraSettings();
+      } catch (error) { setMessage('Enter a valid Limelight stream URL first.', true); }
+    }
     function updateStatus(data) {
       const active = Boolean(data.recording);
       const starting = data.status === 'starting';
@@ -502,10 +531,6 @@ PAGE = r'''<!doctype html>
       }
       if (data.capture_mode) captureMode.textContent = data.capture_mode === 'maximum available' ? 'Limelight camera rate' : data.capture_mode;
       if (data.session_dir) session.textContent = data.session_dir;
-      if (data.intake_mode) {
-        intakeMode.textContent = data.intake_mode;
-        pipelineTitle.textContent = data.intake_mode.toLowerCase().includes('proxy') ? 'PROXY BACKUP' : 'USB DIRECT';
-      }
       if (data.latest_session && data.latest_session.frames_saved !== undefined) frames.textContent = data.latest_session.frames_saved;
       if (data.output_dir) output.textContent = data.output_dir;
       if (!active && data.latest_session && data.latest_session.status === 'error' && data.latest_session.error) {
@@ -517,6 +542,7 @@ PAGE = r'''<!doctype html>
     }
     function applySettings(settings) {
       if (settings.stream_url) stream.value = settings.stream_url;
+      syncFeedTypeFromStream();
       if (settings.output_mode) outputMode.value = settings.output_mode;
       if (settings.output_dir) outputDir.value = settings.output_dir;
       updatePreview();
@@ -641,9 +667,10 @@ PAGE = r'''<!doctype html>
     save.addEventListener('click', saveSettings);
     refreshCamera.addEventListener('click', () => loadCameraSettings(true));
     saveCamera.addEventListener('click', saveCameraSettings);
+    feedType.addEventListener('change', updateStreamForFeedType);
     start.addEventListener('click', startRecording);
     stop.addEventListener('click', stopRecording);
-    stream.addEventListener('change', () => { updatePreview(); loadCameraSettings(); });
+    stream.addEventListener('change', () => { syncFeedTypeFromStream(); updatePreview(); loadCameraSettings(); });
     settingsCollapse.addEventListener('click', () => setSettingsCollapsed(!settingsSidebar.classList.contains('collapsed')));
     updatePreview();
     loadSettings();
@@ -666,6 +693,7 @@ class RecorderWebApp:
         if saved_stream_url.rstrip("/") in {
             "http://limelight.local:5800",
             "http://limelight:5800",
+            "http://172.28.0.1:5800",
         }:
             saved_stream_url = DEFAULT_STREAM_URL
         self.default_stream_url = saved_stream_url or args.stream_url or DEFAULT_STREAM_URL
@@ -793,8 +821,9 @@ class RecorderWebApp:
         hostname = (parsed.hostname or "").lower()
         if hostname not in {"limelight.local", "limelight"} and not hostname.startswith("172."):
             return [source_url]
+        stream_port = parsed.port or STREAM_PORT
         candidates = [
-            f"http://{host}:5800"
+            f"http://{host}:{stream_port}"
             for host in candidate_hosts(0)
             if host.startswith("172.")
         ]
@@ -818,7 +847,7 @@ class RecorderWebApp:
 
         # The fallback still reads the Limelight camera stream, but routes it
         # through this local server so FFmpeg has a second intake path.
-        fallback_url = "http://limelight.local:5800/"
+        fallback_url = f"http://limelight.local:{stream_port}/"
         try:
             discover_stream(stream_url=fallback_url, timeout=1.5)
         except RecorderError as exc:
