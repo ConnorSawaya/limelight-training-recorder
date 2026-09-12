@@ -4,8 +4,6 @@ Small, local control panel for recording Limelight 3A training data over the cam
 
 It records the camera stream with FFmpeg and can save an MP4, JPG frames, and/or a ZIP of the JPGs. The project uses only Python's standard library; FFmpeg is the only runtime dependency.
 
-![Dashboard preview](docs/dashboard.png)
-
 ## How it works
 
 ```text
@@ -62,7 +60,6 @@ web_interface.py         Local browser control panel
 install/                 One-line installers (install.ps1, install.sh)
 windows/                 Windows setup and batch launchers
 macos-linux/             macOS/Linux setup and launchers
-docs/dashboard.png       Dashboard screenshot
 tests/                   Standard-library unit tests
 tools/                   Project-local FFmpeg (created by setup, git-ignored)
 training_data/           Recorded sessions (created when recording, git-ignored)
