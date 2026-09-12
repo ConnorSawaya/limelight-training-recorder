@@ -242,17 +242,17 @@ class LimelightApi:
         if "orientation" in payload:
             updates["image_flip"] = self._number(payload, "orientation", 0, max(ORIENTATIONS), integer=True)
         if "exposure" in payload:
-            updates["exposure"] = self._number(payload, "exposure", 0, 3300)
+            updates["exposure"] = self._number(payload, "exposure", 2, 3300)
         if "black_level_offset" in payload:
-            updates["black_level"] = self._number(payload, "black_level_offset", 0, 1000, integer=True)
+            updates["black_level"] = self._number(payload, "black_level_offset", 0, 40, integer=True)
         if "sensor_gain" in payload:
-            updates["lcgain"] = self._number(payload, "sensor_gain", 0, 100)
+            updates["lcgain"] = self._number(payload, "sensor_gain", 1, 45)
         if "flicker_correction" in payload:
             updates["flicker"] = self._number(payload, "flicker_correction", 0, max(FLICKER_MODES), integer=True)
         if "red_balance" in payload:
-            updates["red_balance"] = self._number(payload, "red_balance", 0, 4095)
+            updates["red_balance"] = self._number(payload, "red_balance", 500, 2500)
         if "blue_balance" in payload:
-            updates["blue_balance"] = self._number(payload, "blue_balance", 0, 4095)
+            updates["blue_balance"] = self._number(payload, "blue_balance", 500, 2500)
         if not updates:
             raise RecorderError("No Limelight camera settings were provided.")
 
@@ -355,7 +355,7 @@ PAGE = r'''<!doctype html>
           <option value="0">Camera</option>
           <option value="1">Snapshot</option>
         </select>
-        <label for="resolution">Resolution / camera FPS</label>
+        <label for="resolution">Processing resolution / camera FPS</label>
         <select id="resolution">
           <option value="0">640x480 90fps</option>
           <option value="1">320x240 90fps</option>
@@ -374,12 +374,13 @@ PAGE = r'''<!doctype html>
           <option value="4">Mirror Horizontal</option>
           <option value="5">Mirror Vertical</option>
         </select>
+        <p class="setting-note">Orientation changes the outgoing video stream only; it does not affect pipeline tracking.</p>
         <label for="exposure">Exposure (.01 ms)</label>
-        <input id="exposure" type="number" min="0" max="3300" step="1">
+        <input id="exposure" type="number" min="2" max="3300" step="1">
         <label for="blackLevel">Black level offset</label>
-        <input id="blackLevel" type="number" min="0" max="1000" step="1">
+        <input id="blackLevel" type="number" min="0" max="40" step="1">
         <label for="sensorGain">Sensor gain</label>
-        <input id="sensorGain" type="number" min="0" max="100" step="0.1">
+        <input id="sensorGain" type="number" min="1" max="45" step="0.1">
         <label for="flicker">Flicker correction</label>
         <select id="flicker">
           <option value="0">None</option>
@@ -387,9 +388,9 @@ PAGE = r'''<!doctype html>
           <option value="2">60hz</option>
         </select>
         <label for="redBalance">Red balance</label>
-        <input id="redBalance" type="number" min="0" max="4095" step="1">
+        <input id="redBalance" type="number" min="500" max="2500" step="1">
         <label for="blueBalance">Blue balance</label>
-        <input id="blueBalance" type="number" min="0" max="4095" step="1">
+        <input id="blueBalance" type="number" min="500" max="2500" step="1">
         <div class="row setting-actions">
           <button id="refreshCamera" class="secondary">Refresh camera settings</button>
           <button id="saveCamera" class="save">Save to Limelight</button>

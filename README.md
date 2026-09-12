@@ -119,6 +119,8 @@ http://127.0.0.1:8080/
 
 The page shows the live MJPEG feed and reads and writes Limelight camera settings (resolution/FPS, exposure, gain, orientation, flicker correction, white balance) directly on the device. Use **Camera feed to record** to choose the raw camera image or the processed overlay image. There is no URL to configure: the dashboard detects the camera automatically.
 
+The camera labels follow the Limelight 3A controls: exposure is in `.01 ms`, black-level offset is `0–40`, sensor gain is `1–45`, and red/blue balance are `500–2500`. Stream orientation affects the outgoing video image only; it does not change pipeline tracking.
+
 The server binds to `127.0.0.1`, so it is only reachable from this computer. If port 8080 is taken, use another:
 
 ```text

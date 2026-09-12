@@ -48,6 +48,15 @@ class WebInterfaceTests(unittest.TestCase):
             self.assertNotIn("stream_url", settings)
             self.assertEqual(settings["feed_type"], "raw")
 
+    def test_camera_setting_ranges_match_limelight_3a_controls(self):
+        client = web_interface.LimelightApi([])
+        self.assertEqual(client._number({"value": 2}, "value", 2, 3300), 2)
+        self.assertEqual(client._number({"value": 40}, "value", 0, 40, integer=True), 40)
+        self.assertEqual(client._number({"value": 1}, "value", 1, 45), 1)
+        self.assertEqual(client._number({"value": 2500}, "value", 500, 2500), 2500)
+        with self.assertRaises(web_interface.RecorderError):
+            client._number({"value": 41}, "value", 0, 40, integer=True)
+
 
 if __name__ == "__main__":
     unittest.main()
