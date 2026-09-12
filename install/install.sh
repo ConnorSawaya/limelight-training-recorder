@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-line installer for macOS and Linux:
-#   curl -fsSL https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install/install.sh | bash
 set -euo pipefail
 
 REPO="ConnorSawaya/limelight-training-recorder"
@@ -30,4 +30,4 @@ else
     cp -R "$TMP_DIR/limelight-training-recorder-$BRANCH/." "$DEST/"
 fi
 
-exec bash "$DEST/setup.sh"
+exec bash "$DEST/macos-linux/setup.sh"

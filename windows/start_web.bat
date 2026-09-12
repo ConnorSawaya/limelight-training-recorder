@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 where py >nul 2>&1
 if not errorlevel 1 goto use_py
 if exist "%LocalAppData%\Programs\Python\Python313\python.exe" goto use_known_313

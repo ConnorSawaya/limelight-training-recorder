@@ -1,5 +1,5 @@
 # One-line installer for Windows:
-#   irm https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
 $repo = "ConnorSawaya/limelight-training-recorder"
@@ -28,4 +28,4 @@ if (-not (Test-Path -LiteralPath (Join-Path $dest "limelight_recorder.py"))) {
     Write-Host "Using the existing folder $dest."
 }
 
-& (Join-Path $dest "setup_windows.ps1")
+& (Join-Path $dest "windows\setup_windows.ps1")

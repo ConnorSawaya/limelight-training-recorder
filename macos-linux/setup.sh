@@ -2,7 +2,8 @@
 # Limelight Training Recorder setup for macOS and Linux.
 set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FFMPEG_DIR="$PROJECT_DIR/tools/ffmpeg/bin"
 FFMPEG_BIN="$FFMPEG_DIR/ffmpeg"
 

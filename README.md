@@ -11,13 +11,13 @@ Paste one command into a terminal. No git required — it downloads the project,
 **Windows** (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install/install.ps1 | iex
 ```
 
 **macOS / Linux** (Terminal):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ConnorSawaya/limelight-training-recorder/main/install/install.sh | bash
 ```
 
 Or, if you prefer to clone it yourself:
@@ -26,14 +26,27 @@ Or, if you prefer to clone it yourself:
 git clone https://github.com/ConnorSawaya/limelight-training-recorder.git
 ```
 
-Then run `setup_windows.bat` on Windows or `./setup.sh` on macOS/Linux.
+Then run `windows\setup_windows.bat` on Windows or `macos-linux/setup.sh` on macOS/Linux.
 
 ## Quick setup
 
 1. Install **Python 3.10+** if it is not already installed ([Windows](https://www.python.org/downloads/windows/), `brew install python` on macOS). Windows setup can install Python via `winget`.
 2. Connect the Limelight 3A's USB-C communication port directly to the computer with a data-capable USB-C cable. **Do not hold the blue configuration button** while plugging in — that puts the camera into flash mode.
 3. Wait ~20 seconds for the Limelight to boot and for the USB network connection to appear.
-4. Run setup once: double-click **`setup_windows.bat`** on Windows, or run **`./setup.sh`** on macOS/Linux.
+4. Run setup once: double-click **`windows\setup_windows.bat`** on Windows, or run **`macos-linux/setup.sh`** on macOS/Linux.
+
+## Repository layout
+
+```text
+limelight_recorder.py    Core recorder CLI (Windows, macOS, Linux)
+web_interface.py         Local browser control panel
+install/                 One-line installers (install.ps1, install.sh)
+windows/                 Windows setup and batch launchers
+macos-linux/setup.sh     macOS/Linux setup
+tests/                   Standard-library unit tests
+tools/                   Project-local FFmpeg (created by setup, git-ignored)
+training_data/           Recorded sessions (created when recording, git-ignored)
+```
 
 ## Record
 
@@ -41,14 +54,14 @@ The `*.bat` launchers are Windows-only. On macOS/Linux use `python3` instead of 
 
 | Action | Windows (double-click) | Command line |
 | --- | --- | --- |
-| Start (background, 3 FPS) | `start_recorder.bat` | `py -3 limelight_recorder.py start --fps 3` (macOS/Linux: `python3 …`) |
-| Stop and finalize | `stop_recorder.bat` | `py -3 limelight_recorder.py stop` |
-| Check status | `status_recorder.bat` | `py -3 limelight_recorder.py status` |
-| Watch in console | `run_foreground.bat` | `py -3 limelight_recorder.py start --foreground` |
+| Start (background, 3 FPS) | `windows\start_recorder.bat` | `py -3 limelight_recorder.py start --fps 3` (macOS/Linux: `python3 …`) |
+| Stop and finalize | `windows\stop_recorder.bat` | `py -3 limelight_recorder.py stop` |
+| Check status | `windows\status_recorder.bat` | `py -3 limelight_recorder.py status` |
+| Watch in console | `windows\run_foreground.bat` | `py -3 limelight_recorder.py start --foreground` |
 
 ## Browser interface
 
-On Windows, double-click **`start_web.bat`** (after setup). On macOS/Linux run:
+On Windows, double-click **`windows\start_web.bat`** (after setup). On macOS/Linux run:
 
 ```text
 python3 limelight_recorder.py web --open-browser
@@ -60,7 +73,7 @@ The control panel opens at:
 http://127.0.0.1:8080/
 ```
 
-The page shows the live MJPEG feed, checks the camera connection, and lets you pick the recording rate before starting. It also reads and writes Limelight camera settings (resolution, exposure, gain, orientation, flicker correction, white balance) directly on the device.
+The page shows the live MJPEG feed and reads and writes Limelight camera settings (resolution/FPS, exposure, gain, orientation, flicker correction, white balance) directly on the device. The default recording feed is the Limelight's raw MJPEG endpoint on port `5802`, which is intended to provide the camera image before the normal pipeline overlay. Use the **Camera feed to record** menu to choose the processed overlay stream on port `5800` instead.
 
 The server binds to `127.0.0.1`, so it is only reachable from this computer. If port 8080 is taken, use another:
 
@@ -107,7 +120,7 @@ training_data/
 
 ## Camera detection
 
-The recorder probes `limelight.local:5800`, then known USB-network addresses (`172.26.0.1`, `172.27.0.1`, `172.28.0.1`, `172.29.0.1`) in parallel, and verifies the endpoint is an MJPEG stream before starting FFmpeg.
+The recorder probes the direct USB-network addresses on port `5802`, preferring `172.28.0.1`, and then the Limelight hostnames. It verifies the endpoint is an MJPEG stream before starting FFmpeg. The dashboard can use its local MJPEG proxy as a backup only when the direct USB feed cannot be reached.
 
 Verify the connection in a browser:
 
@@ -117,14 +130,14 @@ http://172.26.0.1:5801
 http://172.28.0.1:5801
 ```
 
-The camera's stream is normally the same host on port `5800`; its web interface is on port `5801`. For a custom/static address, pass `--host <IP>` or use `--stream-url <URL>`.
+The Limelight's raw camera stream is on port `5802`; the normal processed/overlay stream is on port `5800`, and its web interface is on port `5801`. For a custom/static address, pass `--host <IP>` or use `--stream-url <URL>`.
 
 ## Troubleshooting
 
 * **No Limelight camera stream was detected** — make sure the camera is powered, fully booted, and connected with a USB-C data cable. Try the browser URLs above, then use `--host` if the web interface works at another address.
 * **Camera shows as a flash/storage device** — unplug it, do not hold the configuration button, and reconnect.
-* **FFmpeg was not found** — run setup again (`setup_windows.bat` or `./setup.sh`), or install FFmpeg and add it to PATH.
-* **A recording is already running** — use `stop_recorder.bat` or `status_recorder.bat`.
+* **FFmpeg was not found** — run setup again (`windows\setup_windows.bat` or `macos-linux/setup.sh`), or install FFmpeg and add it to PATH.
+* **A recording is already running** — use `windows\stop_recorder.bat` or `windows\status_recorder.bat`.
 * **Debugging** — inspect `ffmpeg.log` inside the newest session folder.
 
 ## Tests

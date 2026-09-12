@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $toolsRoot = Join-Path $projectRoot "tools\ffmpeg"
 $ffmpegExe = Join-Path $toolsRoot "bin\ffmpeg.exe"
 
@@ -90,4 +90,4 @@ if ((Test-Path -LiteralPath $ffmpegExe) -or $pathFfmpeg) {
 }
 
 Write-Host ""
-Write-Host "Setup complete. Double-click start_recorder.bat to begin recording."
+Write-Host "Setup complete. Double-click windows\start_recorder.bat to begin recording."
