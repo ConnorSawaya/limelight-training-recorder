@@ -65,6 +65,16 @@ RESOLUTIONS = {
     6: "2592x1944 (5MP) 10fps",
 }
 
+RESOLUTION_FPS = {
+    0: 90.0,
+    1: 90.0,
+    2: 40.0,
+    3: 40.0,
+    4: 90.0,
+    5: 40.0,
+    6: 10.0,
+}
+
 ORIENTATIONS = {
     0: "Normal",
     1: "Upside-Down",
@@ -85,6 +95,15 @@ def validate_feed_type(value: Any) -> str:
     if feed_type not in FEED_TYPES:
         raise RecorderError("Choose either the raw camera feed or the processed overlay feed.")
     return feed_type
+
+
+def resolution_fps(value: Any) -> float | None:
+    """Return the Limelight 3A input FPS for a resolution setting."""
+
+    try:
+        return RESOLUTION_FPS.get(int(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _display_host(hostname: str) -> str:
@@ -457,6 +476,7 @@ PAGE = r'''<!doctype html>
           <div><span>Intake path</span><span id="intakeMode">USB direct preferred</span></div>
           <div><span>Frames saved</span><span id="frames">-</span></div>
           <div><span>Capture mode</span><span id="captureMode">Limelight camera rate</span></div>
+          <div><span>Video timing</span><span id="videoTiming">-</span></div>
           <div><span>Output root</span><span id="output">training_data</span></div>
         </div>
       </section>
@@ -518,6 +538,7 @@ PAGE = r'''<!doctype html>
     const recordingNumber = document.getElementById('recordingNumber');
     const frames = document.getElementById('frames');
     const captureMode = document.getElementById('captureMode');
+    const videoTiming = document.getElementById('videoTiming');
     const output = document.getElementById('output');
     const intakeMode = document.getElementById('intakeMode');
     const pipelineTitle = document.getElementById('pipelineTitle');
@@ -593,6 +614,8 @@ PAGE = r'''<!doctype html>
       if (data.last_error && data.last_error.startsWith('The direct USB Limelight feed')) showOffline(data.last_error);
       if (data.intake_mode && !connectionOffline) applyIntakeMode(data.intake_mode);
       if (data.capture_mode) captureMode.textContent = data.capture_mode === 'maximum available' ? 'Limelight camera rate' : data.capture_mode;
+      if (data.input_fps) videoTiming.textContent = Number(data.input_fps).toFixed(1).replace(/\.0$/, '') + ' FPS input timing';
+      else if (data.timing_mode) videoTiming.textContent = data.timing_mode;
       if (data.session_dir) session.textContent = data.session_dir;
       if (data.recording_number) recordingNumber.textContent = '#' + data.recording_number;
       if (data.latest_session && data.latest_session.recording_number) {
@@ -895,6 +918,8 @@ class RecorderWebApp:
             "intake_mode": self.last_intake_mode,
             "feed_type": state.get("feed_type") or self.feed_type,
             "fps": state.get("fps"),
+            "input_fps": state.get("input_fps"),
+            "timing_mode": state.get("timing_mode"),
             "output_dir": str(self.output_dir),
             "latest_session": self._latest_session(),
             "last_error": self.last_error,
@@ -907,6 +932,15 @@ class RecorderWebApp:
         source_url = (source_url or self.default_stream_url).strip()
         client = LimelightApi(limelight_api_bases(source_url))
         return {"settings": client.get_camera_settings()}
+
+    def _camera_input_fps(self, source_url: str) -> float | None:
+        """Read the configured camera rate for correct MJPEG timestamps."""
+
+        try:
+            settings = LimelightApi(limelight_api_bases(source_url), timeout=1.5).get_camera_settings()
+        except RecorderError:
+            return None
+        return resolution_fps(settings.get("resolution"))
 
     def save_camera_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self.operation_lock:
@@ -1001,6 +1035,7 @@ class RecorderWebApp:
                 self.last_error = str(exc)
                 self.last_intake_mode = "Offline"
                 raise
+            input_fps = self._camera_input_fps(source_url)
             # The camera's Resolution setting controls the incoming stream FPS.
             # Keep the incoming cadence intact instead of applying a second
             # recorder-side sampling rate.
@@ -1015,6 +1050,7 @@ class RecorderWebApp:
                 foreground=False,
                 fps=fps,
                 max_fps=True,
+                input_fps=input_fps,
                 output_mode=output_mode,
                 output_dir=str(parsed["output_dir"]),
                 ffmpeg=self.ffmpeg,

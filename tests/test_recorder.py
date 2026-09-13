@@ -104,6 +104,22 @@ class RecorderTests(unittest.TestCase):
             self.assertIn("-fps_mode", command)
             self.assertNotIn(str(session.video), command)
             self.assertEqual(command.count("-map"), 1)
+            self.assertIn("-use_wallclock_as_timestamps", command)
+
+    def test_ffmpeg_command_uses_camera_rate_before_mjpeg_input(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session = recorder.create_session(temp_dir)
+            command = recorder.ffmpeg_command(
+                Path("ffmpeg.exe"),
+                "http://172.28.0.1:5802/",
+                session,
+                None,
+                "mp4",
+                90,
+            )
+            input_index = command.index("-i")
+            self.assertEqual(command[input_index - 2 : input_index], ["-r", "90"])
+            self.assertNotIn("-use_wallclock_as_timestamps", command)
 
     def test_output_mode_validation(self):
         self.assertEqual(recorder.validate_output_mode("both_zip"), "both_zip")

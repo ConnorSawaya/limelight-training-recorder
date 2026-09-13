@@ -71,12 +71,25 @@ class WebInterfaceTests(unittest.TestCase):
 
     def test_camera_setting_ranges_match_limelight_3a_controls(self):
         client = web_interface.LimelightApi([])
+        self.assertEqual(web_interface.resolution_fps(0), 90.0)
+        self.assertEqual(web_interface.resolution_fps(3), 40.0)
+        self.assertEqual(web_interface.resolution_fps(6), 10.0)
         self.assertEqual(client._number({"value": 2}, "value", 2, 3300), 2)
         self.assertEqual(client._number({"value": 40}, "value", 0, 40, integer=True), 40)
         self.assertEqual(client._number({"value": 1}, "value", 1, 45), 1)
         self.assertEqual(client._number({"value": 2500}, "value", 500, 2500), 2500)
         with self.assertRaises(web_interface.RecorderError):
             client._number({"value": 41}, "value", 0, 40, integer=True)
+
+    def test_web_start_reads_the_camera_rate_for_recording_timing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = self.make_app(temp_dir)
+            with patch.object(
+                web_interface.LimelightApi,
+                "get_camera_settings",
+                return_value={"resolution": 0},
+            ):
+                self.assertEqual(app._camera_input_fps("http://172.28.0.1:5802/"), 90.0)
 
     def test_advanced_camera_settings_are_sent_to_limelight(self):
         client = web_interface.LimelightApi([])

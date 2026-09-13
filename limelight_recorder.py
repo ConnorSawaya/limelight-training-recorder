@@ -367,10 +367,13 @@ def ffmpeg_command(
     session: SessionPaths,
     fps: Optional[float],
     output_mode: str = "both",
+    input_fps: Optional[float] = None,
 ) -> list[str]:
     """Build one FFmpeg command producing the selected recording outputs."""
 
     output_mode = validate_output_mode(output_mode)
+    if input_fps is not None:
+        input_fps = format_fps(input_fps)
 
     command = [
         str(ffmpeg),
@@ -379,9 +382,17 @@ def ffmpeg_command(
         "warning",
         "-rw_timeout",
         "5000000",
-        "-i",
-        stream_url,
     ]
+    # Multipart MJPEG does not carry frame timestamps. Without an input rate,
+    # FFmpeg assigns its 25 FPS default, which makes a 90 FPS Limelight file
+    # play back at the wrong speed. Prefer the camera's configured rate when
+    # known; otherwise use arrival timestamps so the stream is still timed by
+    # the real capture cadence instead of the 25 FPS guess.
+    if input_fps is None:
+        command.extend(["-use_wallclock_as_timestamps", "1"])
+    else:
+        command.extend(["-r", fps_text(input_fps)])
+    command.extend(["-i", stream_url])
     if output_mode in {"both", "both_zip", "mp4"}:
         command.extend(
             [
@@ -468,13 +479,14 @@ def run_session(
     output_mode: str = "both",
     state_file: Path = DEFAULT_STATE_FILE,
     stop_file: Path = DEFAULT_STOP_FILE,
+    input_fps: Optional[float] = None,
 ) -> int:
     """Run FFmpeg until stopped, then finalize metadata and cleanup state."""
 
     output_mode = validate_output_mode(output_mode)
     session_prefix = session_prefix_for_stream(stream.url)
     session = create_session(output_dir, session_prefix)
-    command = ffmpeg_command(ffmpeg, stream.url, session, fps, output_mode)
+    command = ffmpeg_command(ffmpeg, stream.url, session, fps, output_mode, input_fps)
     session_number = recording_number(session)
     feed_type = feed_type_for_stream(stream.url)
     metadata: dict[str, Any] = {
@@ -486,6 +498,8 @@ def run_session(
         "stream_host": stream.host,
         "discovery": stream.source,
         "frame_rate_fps": fps,
+        "input_fps": input_fps,
+        "timing_mode": "camera FPS" if input_fps is not None else "arrival timestamps",
         "capture_mode": "maximum available" if fps is None else "sampled",
         "output_mode": output_mode,
         "video_file": session.video.name if output_mode in {"both", "both_zip", "mp4"} else None,
@@ -526,6 +540,10 @@ def run_session(
         print("Saving every incoming camera frame (maximum available FPS)")
     else:
         print(f"Sampling JPG frames at {fps_text(fps)} FPS")
+    if input_fps is None:
+        print("Timing MJPEG frames from arrival timestamps")
+    else:
+        print(f"Using camera input timing: {fps_text(input_fps)} FPS")
     print(f"Output mode: {output_mode}")
     print("Stop with stop_recorder.bat, or press Ctrl+C in foreground mode.")
 
@@ -613,6 +631,7 @@ def start_recording(args: argparse.Namespace) -> int:
     ensure_not_running(state_file)
     ffmpeg = resolve_ffmpeg(args.ffmpeg)
     fps = None if args.max_fps else args.fps
+    input_fps = getattr(args, "input_fps", None)
     output_mode = validate_output_mode(args.output_mode)
     stream = discover_stream(
         host=args.host,
@@ -623,7 +642,7 @@ def start_recording(args: argparse.Namespace) -> int:
     stop_file.unlink(missing_ok=True)
 
     if args.foreground:
-        return run_session(stream, ffmpeg, args.output_dir, fps, output_mode, state_file, stop_file)
+        return run_session(stream, ffmpeg, args.output_dir, fps, output_mode, state_file, stop_file, input_fps)
 
     state = {
         "pid": 0,
@@ -631,6 +650,8 @@ def start_recording(args: argparse.Namespace) -> int:
         "stream_url": stream.url,
         "feed_type": feed_type_for_stream(stream.url),
         "fps": fps,
+        "input_fps": input_fps,
+        "timing_mode": "camera FPS" if input_fps is not None else "arrival timestamps",
         "capture_mode": "maximum available" if fps is None else "sampled",
         "output_mode": output_mode,
     }
@@ -646,6 +667,8 @@ def start_recording(args: argparse.Namespace) -> int:
         child_command.extend(["--max-fps"])
     else:
         child_command.extend(["--fps", fps_text(fps)])
+    if input_fps is not None:
+        child_command.extend(["--input-fps", fps_text(input_fps)])
     child_command.extend(
         [
             "--output-dir",
@@ -741,6 +764,7 @@ def show_status(state_file: Path = DEFAULT_STATE_FILE) -> int:
 
 def add_recording_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fps", type=format_fps, default=3.0, help="Recording frame rate; default: 3")
+    parser.add_argument("--input-fps", type=format_fps, default=None, help=argparse.SUPPRESS)
     parser.add_argument(
         "--max-fps",
         action="store_true",
@@ -830,6 +854,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 args.output_mode,
                 Path(args.state_file).expanduser().resolve(),
                 Path(args.stop_file).expanduser().resolve(),
+                args.input_fps,
             )
         if args.command == "stop":
             return stop_recording(Path(args.state_file).expanduser().resolve(), Path(args.stop_file).expanduser().resolve())

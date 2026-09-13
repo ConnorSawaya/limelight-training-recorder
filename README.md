@@ -122,6 +122,8 @@ http://127.0.0.1:8080/
 
 The page shows the live MJPEG feed and reads and writes Limelight camera settings (resolution/FPS, exposure, gain, orientation, flicker correction, white balance) directly on the device. Use **Camera feed to record** to choose the raw camera image or the processed overlay image. There is no URL to configure: the dashboard detects the camera automatically.
 
+The Limelight MJPEG stream does not include frame timestamps. The dashboard reads the selected camera resolution and passes its real input rate (90, 40, or 10 FPS) to FFmpeg so saved MP4 files are not mislabeled with FFmpeg's 25 FPS default. CLI recordings use frame-arrival timestamps when the camera rate is not available.
+
 The camera labels follow the Limelight 3A controls: exposure is in `.01 ms`, black-level offset is `0–40`, sensor gain is `1–45`, and red/blue balance are `500–2500`. Stream orientation affects the outgoing video image only; it does not change pipeline tracking.
 
 The server binds to `127.0.0.1`, so it is only reachable from this computer. If port 8080 is taken, use another:
@@ -167,7 +169,7 @@ training_data/
     ...                     (the next recording)
 ```
 
-If two sessions start in the same second, the final number increments to `_02`, `_03`, and so on. Overlay sessions use the `limelight_overlay_data_...` prefix. `metadata.json` records the session name, recording number, stream URL, intake mode, capture mode, output mode, timestamps, and output counts.
+If two sessions start in the same second, the final number increments to `_02`, `_03`, and so on. Overlay sessions use the `limelight_overlay_data_...` prefix. `metadata.json` records the session name, recording number, stream URL, intake mode, capture mode, input FPS/timing mode, output mode, timestamps, and output counts.
 
 ## Camera detection
 
