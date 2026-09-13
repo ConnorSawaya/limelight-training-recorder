@@ -27,6 +27,24 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertNotIn("Limelight MJPEG stream URL", web_interface.PAGE)
         self.assertNotIn("Save output settings", web_interface.PAGE)
         self.assertIn("These settings save automatically", web_interface.PAGE)
+        self.assertIn('id="connectionBanner"', web_interface.PAGE)
+        self.assertIn("Limelight offline", web_interface.PAGE)
+        self.assertIn("Show connection details", web_interface.PAGE)
+
+    def test_failed_check_marks_app_offline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            app = self.make_app(temp_dir)
+            with patch.object(
+                app,
+                "_select_intake",
+                side_effect=web_interface.RecorderError(
+                    "The direct USB Limelight feed was not detected, and the proxy backup is unavailable."
+                ),
+            ):
+                with self.assertRaises(web_interface.RecorderError):
+                    app.check()
+            self.assertEqual(app.last_intake_mode, "Offline")
+            self.assertIn("proxy backup is unavailable", app.status()["last_error"])
 
     def test_feed_choice_builds_the_internal_stream_port(self):
         with tempfile.TemporaryDirectory() as temp_dir:

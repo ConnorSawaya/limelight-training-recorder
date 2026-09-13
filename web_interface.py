@@ -275,6 +275,15 @@ PAGE = r'''<!doctype html>
     h2 { margin: 0 0 16px; font-size: 18px; }
     .pipeline { margin: 0 0 18px; padding: 11px 15px; border: 1px solid #31506b; border-radius: 10px; background: #142333; }
     .pipeline-title { border: 1px solid #36cf80; border-radius: 999px; color: #8ff0b8; padding: 4px 9px; font-size: 11px; font-weight: 800; letter-spacing: .07em; }
+    .pipeline-title.offline { border-color: var(--red); color: #ffb8bc; background: #341a20; }
+    .connection-banner { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 18px; padding: 14px 16px; border: 1px solid #a73f48; border-radius: 10px; background: #341a20; color: #ffd9dc; }
+    .connection-banner[hidden] { display: none; }
+    .connection-icon { display: grid; place-items: center; flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; color: #341a20; background: var(--red); font-weight: 900; }
+    .connection-banner strong { display: block; color: #fff; }
+    .connection-banner p { margin: 2px 0 0; color: #ffb8bc; font-size: 13px; }
+    .connection-banner details { margin-top: 8px; color: #ffb8bc; font-size: 12px; }
+    .connection-banner summary { cursor: pointer; color: #ffd9dc; }
+    .connection-banner pre { max-height: 150px; margin: 8px 0 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #f3c5c8; font: 12px/1.4 Consolas, monospace; }
     .settings-sidebar { position: fixed; inset: 0 0 0 auto; z-index: 10; width: 380px; overflow-y: auto; padding: 22px; background: #171e27; border-left: 1px solid var(--line); box-shadow: -12px 0 36px #0008; transition: width .18s ease, padding .18s ease; }
     .settings-sidebar.collapsed { width: 44px; padding: 12px 8px; overflow: hidden; }
     .settings-sidebar.collapsed .settings-content { display: none; }
@@ -299,7 +308,9 @@ PAGE = r'''<!doctype html>
     .output-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
     .preview { padding: 10px; }
     .preview-box { aspect-ratio: 16 / 10; display: grid; place-items: center; overflow: hidden; border-radius: 9px; background: #080a0d; border: 1px solid #26303b; }
+    .preview.offline .preview-box { border-color: #a73f48; background: #241318; }
     #preview { display: block; width: 100%; height: 100%; object-fit: contain; }
+    #preview[hidden] { display: none; }
     .empty { color: var(--muted); text-align: center; padding: 30px; }
     label { display: block; color: var(--muted); font-size: 13px; margin: 15px 0 6px; }
     input, select { width: 100%; border: 1px solid #465465; border-radius: 7px; background: #11161d; color: var(--text); padding: 10px 11px; font: inherit; }
@@ -412,8 +423,19 @@ PAGE = r'''<!doctype html>
     <div class="pipeline">
       <span id="pipelineTitle" class="pipeline-title">USB DIRECT</span>
     </div>
+    <div id="connectionBanner" class="connection-banner" role="alert" hidden>
+      <span class="connection-icon" aria-hidden="true">!</span>
+      <div>
+        <strong>Limelight offline</strong>
+        <p id="connectionSummary">No camera stream responded.</p>
+        <details>
+          <summary>Show connection details</summary>
+          <pre id="connectionDetails"></pre>
+        </details>
+      </div>
+    </div>
     <div class="layout">
-      <section class="panel preview">
+      <section id="previewPanel" class="panel preview">
         <h2>Live camera feed</h2>
         <div class="preview-box">
           <img id="preview" alt="Limelight camera preview" hidden>
@@ -501,8 +523,13 @@ PAGE = r'''<!doctype html>
     const intakeMode = document.getElementById('intakeMode');
     const pipelineTitle = document.getElementById('pipelineTitle');
     const saveState = document.getElementById('saveState');
+    const previewPanel = document.getElementById('previewPanel');
+    const connectionBanner = document.getElementById('connectionBanner');
+    const connectionSummary = document.getElementById('connectionSummary');
+    const connectionDetails = document.getElementById('connectionDetails');
     let saveTimer = null;
     let activePreviewUrl = '';
+    let connectionOffline = false;
 
     function setSettingsCollapsed(collapsed) {
       settingsSidebar.classList.toggle('collapsed', collapsed);
@@ -514,6 +541,38 @@ PAGE = r'''<!doctype html>
     function setMessage(text, isError = false) {
       message.textContent = text || '';
       message.className = isError ? 'message error' : 'message';
+    }
+    function applyIntakeMode(mode) {
+      const label = String(mode || '');
+      const lower = label.toLowerCase();
+      intakeMode.textContent = label || 'Unknown';
+      pipelineTitle.textContent = lower.includes('offline') ? 'OFFLINE' : lower.includes('proxy') ? 'PROXY BACKUP' : 'USB DIRECT';
+      pipelineTitle.classList.toggle('offline', lower.includes('offline'));
+    }
+    function showOffline(detail = '') {
+      connectionOffline = true;
+      connectionBanner.hidden = false;
+      connectionSummary.textContent = 'Connect the Limelight over USB-C, wait for it to boot, then click Check connection.';
+      connectionDetails.textContent = detail || 'No direct USB stream or proxy backup responded.';
+      previewPanel.classList.add('offline');
+      applyIntakeMode('Offline');
+      cameraState.className = 'camera-state bad';
+      cameraState.querySelector('strong').textContent = 'Offline';
+      cameraFps.textContent = '-';
+      pipelineIndex.textContent = '-';
+      updatePreview('');
+      empty.textContent = 'Limelight offline. Connect USB-C and click Check connection.';
+      dot.className = 'dot bad';
+      setMessage('Limelight offline. No camera stream was detected.', true);
+    }
+    function showOnline(mode) {
+      connectionOffline = false;
+      connectionBanner.hidden = true;
+      previewPanel.classList.remove('offline');
+      applyIntakeMode(mode || 'USB direct');
+      cameraState.className = 'camera-state ok';
+      cameraState.querySelector('strong').textContent = 'Connected';
+      empty.textContent = 'Click Check connection to find the Limelight.';
     }
     function updatePreview(url = activePreviewUrl) {
       activePreviewUrl = url || '';
@@ -532,10 +591,8 @@ PAGE = r'''<!doctype html>
       if (data.recording && data.stream_url) {
         updatePreview(data.stream_url);
       }
-      if (data.intake_mode) {
-        intakeMode.textContent = data.intake_mode;
-        pipelineTitle.textContent = data.intake_mode.toLowerCase().includes('proxy') ? 'PROXY BACKUP' : 'USB DIRECT';
-      }
+      if (data.last_error && data.last_error.startsWith('The direct USB Limelight feed')) showOffline(data.last_error);
+      if (data.intake_mode && !connectionOffline) applyIntakeMode(data.intake_mode);
       if (data.capture_mode) captureMode.textContent = data.capture_mode === 'maximum available' ? 'Limelight camera rate' : data.capture_mode;
       if (data.session_dir) session.textContent = data.session_dir;
       if (data.recording_number) recordingNumber.textContent = '#' + data.recording_number;
@@ -612,11 +669,8 @@ PAGE = r'''<!doctype html>
         applyCameraSettings(data.settings);
         if (showMessage) setMessage('Limelight camera settings loaded.');
       } catch (error) {
-        cameraState.className = 'camera-state bad';
-        cameraState.querySelector('strong').textContent = 'Not detected';
-        cameraFps.textContent = '-';
-        pipelineIndex.textContent = '-';
-        if (showMessage) setMessage(error.message, true);
+        showOffline(error.message);
+        if (!showMessage) setMessage('Limelight offline. Camera settings are unavailable.', true);
       } finally { refreshCamera.disabled = false; }
     }
     async function saveCameraSettings() {
@@ -648,15 +702,11 @@ PAGE = r'''<!doctype html>
       try {
         const data = await callApi('/api/check?feed_type=' + encodeURIComponent(feedType.value));
         if (data.preview_url) updatePreview(data.preview_url);
-        if (data.intake_mode) {
-          intakeMode.textContent = data.intake_mode;
-          pipelineTitle.textContent = data.intake_mode.toLowerCase().includes('proxy') ? 'PROXY BACKUP' : 'USB DIRECT';
-        }
+        showOnline(data.intake_mode);
         setMessage('Limelight detected via ' + (data.intake_mode || 'direct feed') + '.');
         dot.className = 'dot ok';
       } catch (error) {
-        setMessage(error.message, true);
-        dot.className = 'dot bad';
+        showOffline(error.message);
       } finally { check.disabled = false; }
     }
     async function startRecording() {
@@ -666,7 +716,7 @@ PAGE = r'''<!doctype html>
         const data = await callApi('/api/start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(collectSettings()) });
         setMessage(data.message);
         updateStatus(data.status);
-      } catch (error) { setMessage(error.message, true); await refresh(); }
+      } catch (error) { if (error.message.includes('Limelight') || error.message.includes('USB')) showOffline(error.message); else setMessage(error.message, true); await refresh(); }
     }
     async function stopRecording() {
       stop.disabled = true;
@@ -686,6 +736,7 @@ PAGE = r'''<!doctype html>
     start.addEventListener('click', startRecording);
     stop.addEventListener('click', stopRecording);
     settingsCollapse.addEventListener('click', () => setSettingsCollapsed(!settingsSidebar.classList.contains('collapsed')));
+    preview.addEventListener('error', () => showOffline('The preview stream stopped responding.'));
     updatePreview('');
     loadSettings().then(() => { checkConnection(); loadCameraSettings(); });
     refresh();
@@ -921,7 +972,14 @@ class RecorderWebApp:
     def check(self, feed_type: str | None = None) -> dict[str, Any]:
         feed_type = validate_feed_type(feed_type or self.feed_type)
         source_url = self._stream_url_for_feed(feed_type)
-        info, intake_mode = self._select_intake(source_url)
+        try:
+            info, intake_mode = self._select_intake(source_url)
+        except RecorderError as exc:
+            self.last_error = str(exc)
+            self.last_intake_mode = "Offline"
+            raise
+        self.last_error = None
+        self.last_intake_mode = intake_mode
         return {
             "reachable": True,
             "stream_url": info.url,
@@ -940,7 +998,12 @@ class RecorderWebApp:
             parsed = self._parse_settings(payload)
             self._apply_settings(parsed)
             source_url = parsed["stream_url"]
-            selected_stream, intake_mode = self._select_intake(source_url)
+            try:
+                selected_stream, intake_mode = self._select_intake(source_url)
+            except RecorderError as exc:
+                self.last_error = str(exc)
+                self.last_intake_mode = "Offline"
+                raise
             # The camera's Resolution setting controls the incoming stream FPS.
             # Keep the incoming cadence intact instead of applying a second
             # recorder-side sampling rate.
