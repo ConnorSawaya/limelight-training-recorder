@@ -202,7 +202,6 @@ class LimelightApi:
             "fps": measured_fps,
             "pipeline_type": pipeline_type,
             "pipeline_type_label": PIPELINE_TYPES.get(pipeline_type, pipeline_type),
-            "source_image": self._int_value(profile, "image_source"),
             "resolution": self._int_value(profile, "pipeline_res"),
             "orientation": self._int_value(profile, "image_flip"),
             "exposure": self._float_value(profile, "exposure"),
@@ -235,8 +234,6 @@ class LimelightApi:
             if pipeline_type not in PIPELINE_TYPES:
                 raise RecorderError("Choose a valid Limelight pipeline type.")
             updates["pipeline_type"] = pipeline_type
-        if "source_image" in payload:
-            updates["image_source"] = self._number(payload, "source_image", 0, 1, integer=True)
         if "resolution" in payload:
             updates["pipeline_res"] = self._number(payload, "resolution", 0, max(RESOLUTIONS), integer=True)
         if "orientation" in payload:
@@ -299,6 +296,10 @@ PAGE = r'''<!doctype html>
     .camera-state.bad strong { color: var(--red); }
     .setting-note { color: var(--muted); font-size: 12px; margin: 9px 0 0; }
     .setting-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .advanced-settings { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .advanced-settings summary { cursor: pointer; color: var(--text); font-size: 15px; font-weight: 700; }
+    .advanced-settings summary::marker { color: var(--blue); }
+    .advanced-settings[open] summary { margin-bottom: 12px; }
     .layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(290px, .7fr); gap: 18px; align-items: start; }
     .panel { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: 0 12px 36px #0004; }
     .output-settings { margin-top: 18px; }
@@ -361,11 +362,6 @@ PAGE = r'''<!doctype html>
           <option value="pipe_viewfinder">Viewfinder</option>
           <option value="pipe_focus">Focus</option>
         </select>
-        <label for="sourceImage">Source image</label>
-        <select id="sourceImage">
-          <option value="0">Camera</option>
-          <option value="1">Snapshot</option>
-        </select>
         <label for="resolution">Processing resolution / camera FPS</label>
         <select id="resolution">
           <option value="0">640x480 90fps</option>
@@ -388,20 +384,24 @@ PAGE = r'''<!doctype html>
         <p class="setting-note">Orientation changes the outgoing video stream only; it does not affect pipeline tracking.</p>
         <label for="exposure">Exposure (.01 ms)</label>
         <input id="exposure" type="number" min="2" max="3300" step="1">
-        <label for="blackLevel">Black level offset</label>
-        <input id="blackLevel" type="number" min="0" max="40" step="1">
-        <label for="sensorGain">Sensor gain</label>
-        <input id="sensorGain" type="number" min="1" max="45" step="0.1">
-        <label for="flicker">Flicker correction</label>
-        <select id="flicker">
-          <option value="0">None</option>
-          <option value="1">50hz</option>
-          <option value="2">60hz</option>
-        </select>
-        <label for="redBalance">Red balance</label>
-        <input id="redBalance" type="number" min="500" max="2500" step="1">
-        <label for="blueBalance">Blue balance</label>
-        <input id="blueBalance" type="number" min="500" max="2500" step="1">
+        <details class="advanced-settings">
+          <summary>Advanced camera settings</summary>
+          <p class="setting-note">These controls are linked to the Limelight and apply when you click Save to Limelight.</p>
+          <label for="blackLevel">Black level offset</label>
+          <input id="blackLevel" type="number" min="0" max="40" step="1">
+          <label for="sensorGain">Sensor gain</label>
+          <input id="sensorGain" type="number" min="1" max="45" step="0.1">
+          <label for="flicker">Flicker correction</label>
+          <select id="flicker">
+            <option value="0">None</option>
+            <option value="1">50hz</option>
+            <option value="2">60hz</option>
+          </select>
+          <label for="redBalance">Red balance</label>
+          <input id="redBalance" type="number" min="500" max="2500" step="1">
+          <label for="blueBalance">Blue balance</label>
+          <input id="blueBalance" type="number" min="500" max="2500" step="1">
+        </details>
         <div class="row setting-actions">
           <button id="refreshCamera" class="secondary">Refresh camera settings</button>
           <button id="saveCamera" class="save">Save to Limelight</button>
@@ -503,7 +503,6 @@ PAGE = r'''<!doctype html>
     const cameraFps = document.getElementById('cameraFps');
     const pipelineIndex = document.getElementById('pipelineIndex');
     const pipelineType = document.getElementById('pipelineType');
-    const sourceImage = document.getElementById('sourceImage');
     const resolution = document.getElementById('resolution');
     const orientation = document.getElementById('orientation');
     const exposure = document.getElementById('exposure');
@@ -635,7 +634,6 @@ PAGE = r'''<!doctype html>
     function cameraFields() {
       return {
         pipeline_type: pipelineType.value,
-        source_image: sourceImage.value,
         resolution: resolution.value,
         orientation: orientation.value,
         exposure: exposure.value,
@@ -648,7 +646,6 @@ PAGE = r'''<!doctype html>
     }
     function applyCameraSettings(settings) {
       if (settings.pipeline_type) pipelineType.value = settings.pipeline_type;
-      sourceImage.value = String(settings.source_image ?? 0);
       resolution.value = String(settings.resolution ?? 0);
       orientation.value = String(settings.orientation ?? 0);
       exposure.value = settings.exposure ?? '';

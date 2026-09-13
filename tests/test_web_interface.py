@@ -26,6 +26,9 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertNotIn('id="stream"', web_interface.PAGE)
         self.assertNotIn("Limelight MJPEG stream URL", web_interface.PAGE)
         self.assertNotIn("Save output settings", web_interface.PAGE)
+        self.assertNotIn("Source image", web_interface.PAGE)
+        self.assertNotIn('id="sourceImage"', web_interface.PAGE)
+        self.assertIn("Advanced camera settings", web_interface.PAGE)
         self.assertIn("These settings save automatically", web_interface.PAGE)
         self.assertIn('id="connectionBanner"', web_interface.PAGE)
         self.assertIn("Limelight offline", web_interface.PAGE)
@@ -74,6 +77,36 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertEqual(client._number({"value": 2500}, "value", 500, 2500), 2500)
         with self.assertRaises(web_interface.RecorderError):
             client._number({"value": 41}, "value", 0, 40, integer=True)
+
+    def test_advanced_camera_settings_are_sent_to_limelight(self):
+        client = web_interface.LimelightApi([])
+        current = {"api_base_url": "http://172.28.0.1:5807"}
+        saved = {"resolution": 0, "black_level_offset": 12}
+        with patch.object(client, "get_camera_settings", side_effect=[current, saved]), patch.object(
+            client, "_request"
+        ) as request:
+            result = client.save_camera_settings(
+                {
+                    "black_level_offset": "12",
+                    "sensor_gain": "6.5",
+                    "flicker_correction": "2",
+                    "red_balance": "1200",
+                    "blue_balance": "1300",
+                }
+            )
+        request.assert_called_once_with(
+            "http://172.28.0.1:5807",
+            "/update-pipeline?flush=1",
+            "POST",
+            {
+                "black_level": 12,
+                "lcgain": 6.5,
+                "flicker": 2,
+                "red_balance": 1200,
+                "blue_balance": 1300,
+            },
+        )
+        self.assertEqual(result, saved)
 
 
 if __name__ == "__main__":
